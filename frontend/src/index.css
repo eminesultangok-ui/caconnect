@@ -1,0 +1,29 @@
+/* Tailwind CSS v3 directives */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Global base styles */
+body {
+  @apply bg-neutral-100 text-neutral-800 font-sans antialiased;
+  margin: 0;
+  padding: 0;
+}
+
+/* Mobile phone frame — centred, max 420px, white bg, shadow on wider screens */
+#root {
+  @apply mx-auto bg-white min-h-screen;
+  max-width: 420px;
+}
+
+@media (min-width: 480px) {
+  #root {
+    @apply shadow-xl rounded-2xl my-4;
+    min-height: calc(100vh - 2rem);
+  }
+}
+
+/* Utility class for page containers */
+.page-container {
+  @apply px-4 py-6;
+}
