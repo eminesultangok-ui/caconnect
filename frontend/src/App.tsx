@@ -206,13 +206,13 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage onLogin={handleLogin} initialLoading={initialLoading} />} />
-      <Route path="/setup" element={<RequireProfile currentUser={currentUser}><ProfileSetupPage profile={currentUser} onComplete={handleProfileComplete} onSignOut={handleSignOut} /></RequireProfile>} />
-      <Route path="/dashboard" element={<RequireProfile currentUser={currentUser}><DashboardPage actions={corporateActions} reviews={reviews} profile={currentUser} stats={stats} onSignOut={handleSignOut} /></RequireProfile>} />
-      <Route path="/event/:id" element={<RequireProfile currentUser={currentUser}><EventDetailPage actions={corporateActions} reviews={reviews} profile={currentUser} reviewDraft={reviewDraft} onBeginReview={handleBeginReview} onResetDraft={handleResetDraft} onSignOut={handleSignOut} /></RequireProfile>} />
-      <Route path="/event/:id/review" element={<RequireProfile currentUser={currentUser}><ReviewPage draft={reviewDraft} actions={corporateActions} profile={currentUser} onChange={handleDraftChange} onSubmit={handleReviewSubmit} onSignOut={handleSignOut} /></RequireProfile>} />
-      <Route path="/confirm" element={<RequireProfile currentUser={currentUser}><ConfirmPage draft={reviewDraft} actions={corporateActions} profile={currentUser} onConfirm={handleConfirm} onSignOut={handleSignOut} /></RequireProfile>} />
-      <Route path="/result" element={<RequireProfile currentUser={currentUser}><ResultPage reviews={reviews} stats={stats} onDelete={handleDeleteReview} onSignOut={handleSignOut} /></RequireProfile>} />
-      <Route path="/history" element={<RequireProfile currentUser={currentUser}><HistoryPage reviews={reviews} stats={stats} onDelete={handleDeleteReview} onSignOut={handleSignOut} /></RequireProfile>} />
+      <Route path="/setup" element={<RequireProfile currentUser={currentUser} initialLoading={initialLoading}><ProfileSetupPage profile={currentUser} onComplete={handleProfileComplete} onSignOut={handleSignOut} /></RequireProfile>} />
+      <Route path="/dashboard" element={<RequireProfile currentUser={currentUser} initialLoading={initialLoading}><DashboardPage actions={corporateActions} reviews={reviews} profile={currentUser} stats={stats} onSignOut={handleSignOut} /></RequireProfile>} />
+      <Route path="/event/:id" element={<RequireProfile currentUser={currentUser} initialLoading={initialLoading}><EventDetailPage actions={corporateActions} reviews={reviews} profile={currentUser} reviewDraft={reviewDraft} initialLoading={initialLoading} onBeginReview={handleBeginReview} onResetDraft={handleResetDraft} onSignOut={handleSignOut} /></RequireProfile>} />
+      <Route path="/event/:id/review" element={<RequireProfile currentUser={currentUser} initialLoading={initialLoading}><ReviewPage draft={reviewDraft} actions={corporateActions} profile={currentUser} initialLoading={initialLoading} onChange={handleDraftChange} onSubmit={handleReviewSubmit} onSignOut={handleSignOut} /></RequireProfile>} />
+      <Route path="/confirm" element={<RequireProfile currentUser={currentUser} initialLoading={initialLoading}><ConfirmPage draft={reviewDraft} actions={corporateActions} profile={currentUser} onConfirm={handleConfirm} onSignOut={handleSignOut} /></RequireProfile>} />
+      <Route path="/result" element={<RequireProfile currentUser={currentUser} initialLoading={initialLoading}><ResultPage reviews={reviews} stats={stats} onDelete={handleDeleteReview} onSignOut={handleSignOut} /></RequireProfile>} />
+      <Route path="/history" element={<RequireProfile currentUser={currentUser} initialLoading={initialLoading}><HistoryPage reviews={reviews} stats={stats} onDelete={handleDeleteReview} onSignOut={handleSignOut} /></RequireProfile>} />
       <Route path="*" element={<LoginPage onLogin={handleLogin} initialLoading={initialLoading} />} />
     </Routes>
   );

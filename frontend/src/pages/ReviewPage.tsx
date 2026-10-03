@@ -18,12 +18,13 @@ interface ReviewPageProps {
   draft: ReviewDraft;
   actions: CorporateAction[];
   profile: AdvisorProfile | null;
+  initialLoading?: boolean;
   onChange: (updates: Partial<ReviewDraft>) => void;
   onSubmit: () => void;
   onSignOut?: () => void;
 }
 
-export default function ReviewPage({ draft, actions, profile, onChange, onSubmit, onSignOut }: ReviewPageProps) {
+export default function ReviewPage({ draft, actions, profile, initialLoading, onChange, onSubmit, onSignOut }: ReviewPageProps) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [touched, setTouched] = useState({ affectedAccountCount: false, election: false });
@@ -35,12 +36,27 @@ export default function ReviewPage({ draft, actions, profile, onChange, onSubmit
     window.history.replaceState(null, '');
   }, []);
 
-  // Guard — profile comes from App state, which resets on refresh
+  // Guard — profile and draft come from App state, which resets on refresh.
+  // Wait for initial data load to finish before redirecting (matches A2 pattern).
   useEffect(() => {
-    if (!profile) navigate('/login', { replace: true });
-  }, [profile, navigate]);
+    if (initialLoading) return;
+    if (!profile || !draft.eventId) navigate('/dashboard', { replace: true });
+  }, [initialLoading, profile, draft.eventId, navigate]);
 
-  if (!profile) return null;
+  if (initialLoading) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <svg className="animate-spin h-8 w-8 text-brand-blue" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          <p className="text-sm text-neutral-500">Loading…</p>
+        </div>
+      </div>
+    );
+  }
+  if (!profile || !draft.eventId) return null;
   if (!event) {
     return (
       <div className="min-h-screen bg-brand-light flex items-center justify-center">
