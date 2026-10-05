@@ -12,6 +12,7 @@ import StatusTag from '../components/ui/StatusTag';
 import WaveHeader from '../components/ui/WaveHeader';
 import TabBar from '../components/ui/TabBar';
 import { crossBranchText } from '../utils/crossBranch';
+import { isMandatoryEvent } from '../lib/constants';
 
 interface DashboardPageProps {
   actions: CorporateAction[];
@@ -118,7 +119,8 @@ export default function DashboardPage({ actions, reviews, profile, stats, alerts
                   <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: action.avatarColor }}><span className="text-white text-xs font-bold">{action.ticker}</span></div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
-                      <div><h4 className="text-sm font-semibold text-neutral-800">{action.security}</h4><p className="text-xs text-neutral-500">{action.eventType} · {action.source}</p></div>
+                      <div><h4 className="text-sm font-semibold text-neutral-800">{action.security}</h4><p className="text-xs text-neutral-500">{action.eventType} · {action.source}</p>
+                      <span className={`inline-block mt-1 px-1.5 py-0.5 rounded text-[9px] font-semibold leading-none border ${isMandatoryEvent(action.eventType) ? 'bg-neutral-100 text-neutral-600 border-neutral-200' : 'bg-brand-blue text-white border-brand-blue'}`} title={isMandatoryEvent(action.eventType) ? 'Happens automatically \u2014 no client instruction needed.' : 'The client must choose an option before the deadline.'}>{isMandatoryEvent(action.eventType) ? 'Mandatory' : 'Voluntary'}</span></div>
                       <StatusTag status={action.status} source={action.source} size="sm" />
                     </div>
                     <p className="text-xs text-neutral-400 mt-1">Ex: {action.exDate} · Payment: {action.paymentDate}</p>

@@ -24,7 +24,9 @@ import HistoryPage from './pages/HistoryPage';
 import AlertsPage from './pages/AlertsPage';
 import { computeAlertsCount } from './pages/AlertsPage';
 import SearchPage from './pages/SearchPage';
+import HelpPage from './pages/HelpPage';
 import RequireProfile from './components/RequireProfile';
+import { EVENT_ELECTIONS } from './lib/constants';
 
 const emptyDraft: ReviewDraft = {
   eventId: '', eventType: '', eventStatus: 'Custodian-confirmed',
@@ -155,13 +157,17 @@ export default function App() {
   // ─── Draft handlers (unchanged logic) ─────────────
   const handleBeginReview = useCallback((eventId: string, eventType: string, eventStatus: ReviewDraft['eventStatus'], eventSource: string) => {
     if (eventId !== reviewDraft.eventId) {
-      setReviewDraft({ ...emptyDraft, eventId, eventType, eventStatus, eventSource });
+      const opts = EVENT_ELECTIONS[eventType];
+      const election = opts && opts.length === 1 ? opts[0] : '';
+      setReviewDraft({ ...emptyDraft, eventId, eventType, eventStatus, eventSource, election });
     }
     navigate(`/event/${eventId}/review`);
   }, [navigate, reviewDraft.eventId]);
 
   const handleResetDraft = useCallback((eventId: string, eventType: string, eventStatus: ReviewDraft['eventStatus'], eventSource: string) => {
-    setReviewDraft({ ...emptyDraft, eventId, eventType, eventStatus, eventSource });
+    const opts = EVENT_ELECTIONS[eventType];
+    const election = opts && opts.length === 1 ? opts[0] : '';
+    setReviewDraft({ ...emptyDraft, eventId, eventType, eventStatus, eventSource, election });
     navigate(`/event/${eventId}/review`);
   }, [navigate]);
 
@@ -242,6 +248,7 @@ export default function App() {
       <Route path="/history" element={<RequireProfile currentUser={currentUser} initialLoading={initialLoading}><HistoryPage reviews={reviews} stats={stats} onDelete={handleDeleteReview} alertsCount={alertsCount} onEditProfile={handleEditProfile} onSignOut={handleSignOut} /></RequireProfile>} />
       <Route path="/alerts" element={<RequireProfile currentUser={currentUser} initialLoading={initialLoading}><AlertsPage actions={corporateActions} reviews={reviews} profile={currentUser} alertsCount={alertsCount} onEditProfile={handleEditProfile} onSignOut={handleSignOut} /></RequireProfile>} />
       <Route path="/search" element={<RequireProfile currentUser={currentUser} initialLoading={initialLoading}><SearchPage actions={corporateActions} alertsCount={alertsCount} onEditProfile={handleEditProfile} onSignOut={handleSignOut} /></RequireProfile>} />
+      <Route path="/help" element={<RequireProfile currentUser={currentUser} initialLoading={initialLoading}><HelpPage alertsCount={alertsCount} onEditProfile={handleEditProfile} onSignOut={handleSignOut} /></RequireProfile>} />
       <Route path="*" element={<LoginPage onLogin={handleLogin} initialLoading={initialLoading} />} />
     </Routes>
   );

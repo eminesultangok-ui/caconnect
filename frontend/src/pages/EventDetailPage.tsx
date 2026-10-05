@@ -13,6 +13,7 @@ import IconButton from '../components/ui/IconButton';
 import WaveHeader from '../components/ui/WaveHeader';
 import TabBar from '../components/ui/TabBar';
 import { crossBranchText } from '../utils/crossBranch';
+import { isMandatoryEvent } from '../lib/constants';
 
 interface EventDetailPageProps {
   actions: CorporateAction[];
@@ -93,7 +94,7 @@ export default function EventDetailPage({ actions, reviews: _reviews, profile, r
         {/* Event details grid */}
         <div className="bg-white rounded-lg border border-neutral-100 p-4 mb-4">
           <div className="grid grid-cols-2 gap-3 text-sm">
-            <div><span className="text-neutral-400 text-xs">Event Type</span><p className="font-medium text-neutral-800">{event.eventType}</p></div>
+            <div><span className="text-neutral-400 text-xs">Event Type</span><p className="font-medium text-neutral-800">{event.eventType}{' '}<span className={`inline-block align-middle ml-1 px-1.5 py-0.5 rounded text-[10px] font-semibold leading-none border ${isMandatoryEvent(event.eventType) ? 'bg-neutral-100 text-neutral-600 border-neutral-200' : 'bg-brand-blue text-white border-brand-blue'}`} title={isMandatoryEvent(event.eventType) ? 'Happens automatically \u2014 no client instruction needed.' : 'The client must choose an option before the deadline.'}>{isMandatoryEvent(event.eventType) ? 'Mandatory' : 'Voluntary'}</span></p></div>
             <div><span className="text-neutral-400 text-xs">Ratio</span><p className="font-medium text-neutral-800">{event.ratio}</p></div>
             <div><span className="text-neutral-400 text-xs">Ex-Date</span><p className="font-medium text-neutral-800">{event.exDate}</p></div>
             <div><span className="text-neutral-400 text-xs">Record Date</span><p className="font-medium text-neutral-800">{event.recordDate}</p></div>

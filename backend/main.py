@@ -45,6 +45,18 @@ NOTIFICATION_PREFS = ['email', 'in-app', 'both']
 MIN_PASSWORD_LENGTH = 8
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Election mapping — must stay in sync with frontend/src/lib/constants.ts
+# ──────────────────────────────────────────────────────────────────────────────
+EVENT_ELECTIONS: dict[str, list[str]] = {
+    'Cash Dividend':  ['No election required – cash paid automatically'],
+    'Stock Split':    ['No election required – shares adjusted automatically'],
+    'Merger':         ['No election required – converted automatically under the merger terms'],
+    'Rights Issue':   ['Take up rights', 'Sell rights', 'Let rights lapse'],
+    'Warrant Expiry': ['Exercise warrants', 'Sell warrants', 'Let warrants expire'],
+}
+
+
 class AuthBody(BaseModel):
     email: str
     password: str
@@ -546,6 +558,19 @@ async def submit_review(body: ReviewBody, authorization: str = Header(...)):
         if not events:
             raise HTTPException(status_code=404, detail="Corporate action not found")
         event = events[0]
+        # Validate election against allowed list for this event type
+        event_type = event.get("event_type", "")
+        allowed = EVENT_ELECTIONS.get(event_type)
+        if allowed is None:
+            raise HTTPException(
+                status_code=400,
+                detail="No elections are defined for this event type. Please contact Operations.",
+            )
+        if body.election not in allowed:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Election '{body.election}' is not valid for {event_type}. Allowed: {', '.join(allowed)}",
+            )
         if event["status"] == "Custodian-confirmed":
             profile_resp = await client.get(
                 f"{SUPABASE_URL}/rest/v1/profiles",

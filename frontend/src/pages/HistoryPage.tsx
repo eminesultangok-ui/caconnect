@@ -76,6 +76,7 @@ export default function HistoryPage({ reviews, stats, onDelete, alertsCount = 0,
                       <span>Ref: <span className="font-mono text-neutral-700">{review.reviewId}</span></span>
                       <span>Reviewed: {fmtDate(review.timestamp)}</span>
                       <span>Accounts: {review.affectedAccountCount}</span>
+                      <span>Election: <span className="text-neutral-700">{review.election}</span></span>
                     </div>
                     {/* Self-service / Contacted Operations badge */}
                     <span className={`inline-block mt-2 px-2 py-0.5 rounded-full text-xs font-medium ${review.contactedOps ? 'bg-amber-100 text-warning' : 'bg-green-100 text-success'}`}>

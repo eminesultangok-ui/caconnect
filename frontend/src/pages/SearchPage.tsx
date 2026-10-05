@@ -10,6 +10,7 @@ import StatusTag from '../components/ui/StatusTag';
 import WaveHeader from '../components/ui/WaveHeader';
 import TabBar from '../components/ui/TabBar';
 import TextField from '../components/ui/TextField';
+import { isMandatoryEvent } from '../lib/constants';
 
 interface SearchPageProps {
   actions: CorporateAction[];
@@ -73,8 +74,8 @@ export default function SearchPage({ actions, alertsCount = 0, onEditProfile, on
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <h4 className="text-sm font-semibold text-neutral-800">{a.security}</h4>
-                      <p className="text-xs text-neutral-500">{a.eventType} · {a.market}</p>
+                      <div><h4 className="text-sm font-semibold text-neutral-800">{a.security}</h4><p className="text-xs text-neutral-500">{a.eventType} · {a.market}</p>
+                      <span className={`inline-block mt-1 px-1.5 py-0.5 rounded text-[9px] font-semibold leading-none border ${isMandatoryEvent(a.eventType) ? 'bg-neutral-100 text-neutral-600 border-neutral-200' : 'bg-brand-blue text-white border-brand-blue'}`} title={isMandatoryEvent(a.eventType) ? 'Happens automatically \u2014 no client instruction needed.' : 'The client must choose an option before the deadline.'}>{isMandatoryEvent(a.eventType) ? 'Mandatory' : 'Voluntary'}</span></div>
                     </div>
                     <StatusTag status={a.status} source={a.source} size="sm" />
                   </div>

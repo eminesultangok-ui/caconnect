@@ -6,6 +6,8 @@
  */
 
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { HelpCircle } from 'lucide-react';
 
 interface WaveHeaderProps {
   variant?: 'full' | 'compact';
@@ -50,6 +52,13 @@ export default function WaveHeader({ variant = 'full', subtitle, onSignOut, onEd
       <div className="relative z-10 flex flex-col items-center justify-center h-full px-4">
         {onSignOut && (
           <div className="absolute top-2 right-4 flex items-center gap-3 z-20">
+            <Link
+              to="/help"
+              className="text-xs text-brand-blue underline hover:opacity-70 flex items-center gap-1"
+            >
+              <HelpCircle size={14} />
+              Help
+            </Link>
             {onEditProfile && (
               <button
                 type="button"

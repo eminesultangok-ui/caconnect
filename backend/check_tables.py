@@ -20,7 +20,7 @@ def check_tables():
         print("ERROR: DATABASE_URL is not set in .env")
         sys.exit(1)
 
-    conn = psycopg2.connect(database_url)
+    conn = psycopg2.connect(database_url, options='-c client_encoding=UTF8')
     cur = conn.cursor()
 
     # 1. List our 3 tables and their RLS status

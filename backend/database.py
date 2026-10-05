@@ -19,7 +19,7 @@ def get_connection():
     if not database_url:
         print("ERROR: DATABASE_URL is not set in .env")
         sys.exit(1)
-    return psycopg2.connect(database_url)
+    return psycopg2.connect(database_url, options='-c client_encoding=UTF8')
 
 
 def run_setup():
@@ -28,7 +28,7 @@ def run_setup():
     sql_path = os.path.join(os.path.dirname(__file__), "setup_database.sql")
 
     print(f"Reading SQL from: {sql_path}")
-    with open(sql_path, "r") as f:
+    with open(sql_path, "r", encoding="utf-8") as f:
         sql = f.read()
 
     conn = get_connection()

@@ -2,15 +2,27 @@
  * ReviewPage — Review form: affected accounts, election, notes, ops contact question.
  * Reads draft from props, writes through onChange. No mount-time draft initialization.
  * Uses: FormSection, TextField, StepIndicator components
+ *
+ * Election field behaviour:
+ *   Mandatory events (single option) — shown as read-only text with a note.
+ *   Voluntary events (multiple options) — dropdown, user must choose one.
+ *   Unknown event type — friendly error message, form blocked.
  */
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { ChevronDown } from 'lucide-react';
 import type { CorporateAction, ReviewDraft, AdvisorProfile } from '../types';
 import FormSection from '../components/ui/FormSection';
 import TextField from '../components/ui/TextField';
 import StepIndicator from '../components/ui/StepIndicator';
 import WaveHeader from '../components/ui/WaveHeader';
+import {
+  EVENT_ELECTIONS,
+  isMandatoryEvent,
+  ELECTION_EXPLANATIONS,
+  UNKNOWN_EVENT_TYPE_MESSAGE,
+} from '../lib/constants';
 
 const OPS_REASONS = ['Unclear terminology', 'Figure looked wrong', 'Needed client-level impact', 'Other'];
 
@@ -68,6 +80,12 @@ export default function ReviewPage({ draft, actions, profile, initialLoading, on
     );
   }
 
+  // Election logic derived from event type
+  const eventType = event.eventType;
+  const electionOptions = EVENT_ELECTIONS[eventType] as string[] | undefined;
+  const isUnknown = !electionOptions;
+  const mandatory = !isUnknown && isMandatoryEvent(eventType);
+
   const handleBlur = useCallback((field: 'affectedAccountCount' | 'election') => {
     setTouched((prev) => ({ ...prev, [field]: true }));
   }, []);
@@ -76,8 +94,16 @@ export default function ReviewPage({ draft, actions, profile, initialLoading, on
   const countError = touched.affectedAccountCount && draft.affectedAccountCount <= 0
     ? 'Enter at least 1 affected account' : '';
   const electionError = touched.election && !draft.election.trim()
-    ? 'Please describe your election decision' : '';
-  const isValid = draft.affectedAccountCount > 0 && draft.election.trim().length > 0;
+    ? 'Please select an election option' : '';
+  const isValid = draft.affectedAccountCount > 0 && draft.election.trim().length > 0 && !isUnknown;
+
+  // Build contextual help items for the current event type's options
+  const helpItems = useMemo(() => {
+    if (isUnknown) return [];
+    return (electionOptions as string[])
+      .map((opt) => ({ option: opt, explanation: ELECTION_EXPLANATIONS[opt] }))
+      .filter((item) => !!item.explanation);
+  }, [electionOptions, isUnknown]);
 
   const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
@@ -96,12 +122,87 @@ export default function ReviewPage({ draft, actions, profile, initialLoading, on
         <StepIndicator current={2} />
 
         <h2 className="text-xl font-bold text-brand-blue mb-1">Review: {event.security}</h2>
-        <p className="text-sm text-neutral-500 mb-6">{event.eventType} · {event.market} · {event.id}</p>
+        <p className="text-sm text-neutral-500 mb-6">{event.eventType} <span className={`inline-block align-middle px-1.5 py-0.5 rounded text-[10px] font-semibold leading-none border ${mandatory ? 'bg-neutral-100 text-neutral-600 border-neutral-200' : 'bg-brand-blue text-white border-brand-blue'}`} title={mandatory ? 'Happens automatically \u2014 no client instruction needed.' : 'The client must choose an option before the deadline.'}>{mandatory ? 'Mandatory' : 'Voluntary'}</span> · {event.market} · {event.id}</p>
 
         <form onSubmit={handleSubmit}>
           <FormSection title="Client Impact" description="Record the number of affected client accounts and your election decision.">
             <TextField label="Affected client account count" value={draft.affectedAccountCount > 0 ? String(draft.affectedAccountCount) : ''} onChange={(val) => onChange({ affectedAccountCount: parseInt(val) || 0 })} onBlur={() => handleBlur('affectedAccountCount')} error={countError} touched={touched.affectedAccountCount} type="number" placeholder="e.g. 42" helperText="We record the count only — never client names, account numbers, or holdings." required id="review-count" />
-            <TextField label="Election decision" value={draft.election} onChange={(val) => onChange({ election: val })} onBlur={() => handleBlur('election')} error={electionError} touched={touched.election} placeholder="e.g. Take up rights, Accept dividend, No action required" required id="review-election" />
+            {/* ── Election field ─────────────────────────────── */}
+            {isUnknown ? (
+              /* Unknown event type — friendly error */
+              <div className="rounded-md bg-warning-light border border-amber-300 p-4">
+                <p className="text-sm text-warning font-medium">{UNKNOWN_EVENT_TYPE_MESSAGE}</p>
+              </div>
+            ) : mandatory ? (
+              /* Mandatory event — read-only text */
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 mb-1">
+                  Election decision<span className="text-danger ml-0.5">*</span>
+                </label>
+                <div className="w-full px-3 py-2 rounded-md border border-neutral-200 bg-neutral-50 text-sm text-neutral-700">
+                  {draft.election}
+                </div>
+                <p className="text-xs text-neutral-500 mt-1">
+                  This is a mandatory event — no client instruction is needed.
+                </p>
+              </div>
+            ) : (
+              /* Voluntary event — dropdown, user must choose */
+              <div>
+                <label htmlFor="review-election" className="block text-sm font-medium text-neutral-700 mb-1">
+                  Election decision<span className="text-danger ml-0.5">*</span>
+                </label>
+                <select
+                  id="review-election"
+                  value={draft.election}
+                  onChange={(e) => onChange({ election: e.target.value })}
+                  onBlur={() => handleBlur('election')}
+                  className={`w-full px-3 py-2 rounded-md border text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue ${
+                    touched.election && electionError
+                      ? 'border-danger focus:ring-danger focus:border-danger'
+                      : 'border-neutral-300'
+                  }`}
+                >
+                  <option value="">Select an election</option>
+                  {(electionOptions as string[]).map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+                {touched.election && electionError && (
+                  <p className="text-xs text-danger mt-1">{electionError}</p>
+                )}
+              </div>
+            )}
+
+            {/* ── Contextual help box ────────────────────────── */}
+            {helpItems.length > 0 && (
+              <details className="group border border-neutral-200 rounded-lg overflow-hidden">
+                <summary className="flex items-center gap-2 px-4 py-3 cursor-pointer text-sm font-medium text-brand-blue hover:bg-neutral-50 list-none select-none">
+                  <ChevronDown
+                    size={16}
+                    className="text-neutral-400 transition-transform duration-200 group-open:rotate-180"
+                  />
+                  What do these options mean?
+                </summary>
+                <div className="px-4 pb-4 space-y-3">
+                  {helpItems.map((item) => (
+                    <div key={item.option}>
+                      <p className="text-sm font-medium text-neutral-800">{item.option}</p>
+                      <p className="text-sm text-neutral-600 leading-relaxed">{item.explanation}</p>
+                    </div>
+                  ))}
+                  <div className="border-t border-neutral-100 pt-3 mt-3">
+                    <p className="text-xs text-neutral-500">
+                      This explains the instruction, not investment advice. Confirm the choice with your client.{' '}
+                      <Link to="/help" className="text-brand-blue underline hover:opacity-70">
+                        More questions? See Help & FAQ
+                      </Link>
+                    </p>
+                  </div>
+                </div>
+              </details>
+            )}
+
             <TextField label="Advisor notes (Optional)" value={draft.notes} onChange={(val) => onChange({ notes: val })} placeholder="Any additional observations or context for Operations" helperText="Do not include client names, account numbers or holdings." maxLength={200} id="review-notes" />
           </FormSection>
 
