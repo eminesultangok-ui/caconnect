@@ -204,6 +204,27 @@ async def _get_user_id(access_token: str, client: httpx.AsyncClient) -> str:
     return uid
 
 
+async def _get_user_identity(access_token: str, client: httpx.AsyncClient) -> tuple[str, str]:
+    """Return (user_id, email) from a single /auth/v1/user call."""
+    resp = await client.get(
+        f"{SUPABASE_URL}/auth/v1/user",
+        headers=_supabase_headers(access_token),
+    )
+    _check_supabase(resp, auth_endpoint=True)
+    data = resp.json()
+    uid = data.get("id")
+    email = data.get("email", "")
+    if not uid:
+        raise AuthError()
+    return uid, email
+
+
+def _raise_supabase_error(resp: httpx.Response) -> None:
+    """Log full Supabase error server-side and raise a clean HTTP error."""
+    logger.error("Supabase error %d: %s", resp.status_code, resp.text[:300])
+    raise HTTPException(status_code=resp.status_code, detail="An external service error occurred.")
+
+
 def _generate_reference() -> str:
     year = datetime.now().year
     seq = random.randint(1000, 9999)
@@ -226,7 +247,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -333,14 +354,8 @@ async def logout(authorization: str = Header(...)):
 async def change_password(body: ChangePasswordBody, authorization: str = Header(...)):
     token = authorization.replace("Bearer ", "")
     async with httpx.AsyncClient() as client:
-        # Step 1: get the user's email from their token
-        user_resp = await client.get(
-            f"{SUPABASE_URL}/auth/v1/user",
-            headers=_supabase_headers(token),
-        )
-        _check_supabase(user_resp, auth_endpoint=True)
-        user_data = user_resp.json()
-        email = user_data.get("email", "")
+        # Step 1: get the user's id and email from their token
+        uid, email = await _get_user_identity(token, client)
         if not email:
             raise HTTPException(status_code=400, detail="Could not determine user email")
 
@@ -366,14 +381,7 @@ async def change_password(body: ChangePasswordBody, authorization: str = Header(
 async def get_profile(authorization: str = Header(...)):
     token = authorization.replace("Bearer ", "")
     async with httpx.AsyncClient() as client:
-        uid = await _get_user_id(token, client)
-        # Also fetch email from Supabase Auth (not stored in profiles table)
-        user_resp = await client.get(
-            f"{SUPABASE_URL}/auth/v1/user",
-            headers=_supabase_headers(token),
-        )
-        _check_supabase(user_resp, auth_endpoint=True)
-        email = user_resp.json().get("email", "")
+        uid, email = await _get_user_identity(token, client)
         resp = await client.get(
             f"{SUPABASE_URL}/rest/v1/profiles",
             params={"id": f"eq.{uid}", "select": "*"},
@@ -419,7 +427,7 @@ async def update_profile(body: ProfileBody, authorization: str = Header(...)):
             json=payload,
         )
     if resp.status_code not in (200, 201, 204):
-        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+        _raise_supabase_error(resp)
     return {"status": "ok"}
 # ──────────────────────────────────────────────────────
 # CORPORATE ACTIONS — GET /corporate-actions
@@ -580,30 +588,43 @@ async def submit_review(body: ReviewBody, authorization: str = Header(...)):
             _check_supabase(profile_resp)
             profiles = profile_resp.json()
             profile = profiles[0] if profiles else {}
-            reference = _generate_reference()
-            review_row = {
+            # Build review row (reference generated per attempt)
+            base_review_row = {
                 "user_id": uid, "event_id": body.eventId,
                 "affected_accounts": body.affectedAccountCount,
                 "election_decision": body.election, "notes": body.notes,
                 "contacted_operations": body.contactedOps,
                 "operations_reason": body.opsReason,
                 "status_at_review": event["status"],
-                "reference": reference,
                 "advisor_name": profile.get("full_name", "Unknown"),
                 "branch": profile.get("branch", "Unknown"),
                 "security": event.get("security", ""),
                 "event_type": event.get("event_type", ""),
                 "event_source": event.get("source", ""),
             }
-            insert_resp = await client.post(
-                f"{SUPABASE_URL}/rest/v1/reviews",
-                headers={**_supabase_headers(token), "Prefer": "return=representation"},
-                json=review_row,
-            )
-            if insert_resp.status_code not in (200, 201):
-                raise HTTPException(status_code=insert_resp.status_code, detail=insert_resp.text)
-            inserted = insert_resp.json()
-            inserted_row = inserted[0] if isinstance(inserted, list) and inserted else inserted
+            # Retry up to 3 times on reference collision
+            inserted_row = None
+            for _attempt in range(3):
+                reference = _generate_reference()
+                review_row = {**base_review_row, "reference": reference}
+                insert_resp = await client.post(
+                    f"{SUPABASE_URL}/rest/v1/reviews",
+                    headers={**_supabase_headers(token), "Prefer": "return=representation"},
+                    json=review_row,
+                )
+                if insert_resp.status_code in (200, 201):
+                    inserted = insert_resp.json()
+                    inserted_row = inserted[0] if isinstance(inserted, list) and inserted else inserted
+                    break
+                # 409 = unique violation — retry with a new reference
+                if insert_resp.status_code == 409:
+                    logger.warning("Reference collision on %s, retrying", reference)
+                    continue
+                # Any other error — log and raise clean message
+                _raise_supabase_error(insert_resp)
+            if inserted_row is None:
+                logger.error("Failed to insert review after 3 attempts for event %s", body.eventId)
+                raise HTTPException(status_code=500, detail="Could not save the review. Please try again.")
             # Best-effort: record advisor's branch for cross-branch indicator
             try:
                 rpc_resp = await client.post(
@@ -623,7 +644,7 @@ async def submit_review(body: ReviewBody, authorization: str = Header(...)):
             _check_supabase(reviews_resp)
             self_service_count = len(reviews_resp.json())
             return {
-                "success": True, "reference": reference,
+                "success": True, "reference": inserted_row["reference"],
                 "selfServiceCount": self_service_count,
                 "review": {
                     "reviewId": inserted_row["reference"],
@@ -686,5 +707,5 @@ async def delete_review(review_ref: str, authorization: str = Header(...)):
             headers=_supabase_headers(token),
         )
     if resp.status_code not in (200, 204):
-        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+        _raise_supabase_error(resp)
     return {"status": "deleted"}

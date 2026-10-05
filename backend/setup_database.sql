@@ -46,6 +46,9 @@ CREATE TABLE IF NOT EXISTS reviews (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
+-- Unique index on reference (re-runnable)
+CREATE UNIQUE INDEX IF NOT EXISTS reviews_reference_idx ON reviews(reference);
+
 -- ============================================
 -- SCHEMA MIGRATION — Add columns needed by frontend types
 -- Re-runnable: IF NOT EXISTS prevents errors on re-run.
