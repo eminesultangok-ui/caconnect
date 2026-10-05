@@ -116,7 +116,9 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173. The frontend reads `VITE_API_URL=http://127.0.0.1:8000` from `frontend/.env.development`.
+When both terminals are running, open `http://localhost:5173` in your browser. This address only works on your own computer while the two servers are running; to use the app online, open the live link at the top of this page.
+
+The frontend reads `VITE_API_URL=http://127.0.0.1:8000` from `frontend/.env.development` to reach the local backend.
 
 ## Environment variables
 
