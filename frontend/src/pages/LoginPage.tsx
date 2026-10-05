@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import TextField from '../components/ui/TextField';
 import IconButton from '../components/ui/IconButton';
 import WaveHeader from '../components/ui/WaveHeader';
+import { MIN_PASSWORD_LENGTH } from '../lib/constants';
 
 interface LoginPageProps {
   onLogin: (email: string, password: string, isSignUp: boolean) => Promise<boolean>;
@@ -45,12 +46,13 @@ export default function LoginPage({ onLogin, initialLoading }: LoginPageProps) {
     : touched.email && email.trim() && !emailFormatOk
       ? 'Enter a valid email address'
       : '';
+  const pwMin = isSignUp ? MIN_PASSWORD_LENGTH : 6;
   const passwordError = touched.password && !password
     ? 'Password is required'
-    : touched.password && password.length < 6
-      ? 'Password must be at least 6 characters'
+    : touched.password && password.length < pwMin
+      ? `Password must be at least ${pwMin} characters`
       : '';
-  const isValid = email.trim().length > 0 && emailFormatOk && password.length >= 6;
+  const isValid = email.trim().length > 0 && emailFormatOk && password.length >= pwMin;
 
   // Real auth via Supabase (proxied through backend)
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
@@ -143,6 +145,7 @@ export default function LoginPage({ onLogin, initialLoading }: LoginPageProps) {
               touched={touched.password}
               type="password"
               placeholder="Enter your password"
+              helperText={isSignUp ? `Minimum ${MIN_PASSWORD_LENGTH} characters` : undefined}
               required
               id="login-password"
             />

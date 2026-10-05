@@ -54,6 +54,7 @@ export default function App() {
         name: profileData.name ?? '', branch: profileData.branch ?? '',
         markets: profileData.markets ?? [],
         notificationPref: (profileData.notificationPref as AdvisorProfile['notificationPref']) ?? 'email',
+        email: profileData.email ?? '',
       });
       setCorporateActions(actionsData);
       setReviews(reviewsData);
@@ -115,8 +116,8 @@ export default function App() {
   const alertsCount = useMemo(() => computeAlertsCount(corporateActions), [corporateActions]);
 
   // ─── Sign out ─────────────────────────────────────
-  const handleSignOut = useCallback(() => {
-    api.clearToken();
+  const handleSignOut = useCallback(async () => {
+    await api.logout(); // calls backend + clears local tokens
     setCurrentUser(null); setReviews([]); setCorporateActions([]);
     setReviewDraft({ ...emptyDraft });
     navigate('/login', { replace: true });
@@ -127,6 +128,7 @@ export default function App() {
   ): Promise<boolean> => {
     const resp = isSignUp ? await api.signup(email, password) : await api.login(email, password);
     api.setToken(resp.access_token);
+    api.setRefreshToken(resp.refresh_token);
     const result = await loadAllData({ value: false });
     if (result === 'AuthError') throw new Error('Authentication failed');
     return result === 'Complete';

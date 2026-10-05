@@ -29,6 +29,7 @@ export interface AdvisorProfile {
   branch: string;
   markets: string[];
   notificationPref: 'email' | 'in-app' | 'both';
+  email?: string;
 }
 
 // ReviewEntry — one completed sign-off (stored in Supabase)

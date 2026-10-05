@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator, model_validator
 
 env_path = os.path.join(os.path.dirname(__file__), ".env")
 load_dotenv(env_path)
@@ -34,9 +34,41 @@ class AuthError(Exception):
     pass
 
 
+# ──────────────────────────────────────────────────────
+# Option lists — must stay in sync with ProfileSetupPage
+# ──────────────────────────────────────────────────────
+BRANCHES = ['Melbourne', 'Sydney', 'Singapore', 'London']
+MARKETS = ['Australia', 'Japan', 'South Korea', 'Hong Kong', 'Germany', 'France', 'Switzerland', 'United Kingdom', 'United States']
+NOTIFICATION_PREFS = ['email', 'in-app', 'both']
+
+
+MIN_PASSWORD_LENGTH = 8
+
+
 class AuthBody(BaseModel):
     email: str
     password: str
+
+
+class SignupBody(AuthBody):
+    @field_validator('password')
+    @classmethod
+    def password_min_length(cls, v: str) -> str:
+        if len(v) < MIN_PASSWORD_LENGTH:
+            raise ValueError(f'Password must be at least {MIN_PASSWORD_LENGTH} characters')
+        return v
+
+
+class ChangePasswordBody(BaseModel):
+    current_password: str
+    new_password: str
+
+    @field_validator('new_password')
+    @classmethod
+    def new_password_min_length(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError('New password must be at least 8 characters')
+        return v
 
 
 class ProfileBody(BaseModel):
@@ -44,6 +76,38 @@ class ProfileBody(BaseModel):
     branch: str
     markets: list[str]
     notificationPref: str
+
+    @field_validator('name')
+    @classmethod
+    def name_not_empty(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError('Name must not be empty')
+        return v
+
+    @field_validator('branch')
+    @classmethod
+    def branch_valid(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError('Branch must not be empty')
+        if v not in BRANCHES:
+            raise ValueError(f'Branch must be one of: {", ".join(BRANCHES)}')
+        return v
+
+    @field_validator('markets')
+    @classmethod
+    def markets_valid(cls, v: list[str]) -> list[str]:
+        allowed = set(MARKETS)
+        invalid = [m for m in v if m not in allowed]
+        if invalid:
+            raise ValueError(f'Invalid market(s): {", ".join(invalid)}. Allowed: {", ".join(MARKETS)}')
+        return v
+
+    @field_validator('notificationPref')
+    @classmethod
+    def notification_pref_valid(cls, v: str) -> str:
+        if v not in NOTIFICATION_PREFS:
+            raise ValueError(f'notificationPref must be one of: {", ".join(NOTIFICATION_PREFS)}')
+        return v
 
 
 class ReviewBody(BaseModel):
@@ -54,6 +118,37 @@ class ReviewBody(BaseModel):
     contactedOps: bool
     opsReason: str | None = None
 
+    @field_validator('affectedAccountCount')
+    @classmethod
+    def account_count_valid(cls, v: int) -> int:
+        if v < 0:
+            raise ValueError('affectedAccountCount must be >= 0')
+        if v > 100_000:
+            raise ValueError('affectedAccountCount must be at most 100,000')
+        return v
+
+    @field_validator('election')
+    @classmethod
+    def election_not_empty(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError('Election must not be empty')
+        if len(v.strip()) > 100:
+            raise ValueError('Election must be at most 100 characters')
+        return v
+
+    @field_validator('notes')
+    @classmethod
+    def notes_max_length(cls, v: str) -> str:
+        if len(v) > 200:
+            raise ValueError('Notes must be at most 200 characters')
+        return v
+
+    @model_validator(mode='after')
+    def ops_reason_required(self) -> 'ReviewBody':
+        if self.contactedOps and not (self.opsReason and self.opsReason.strip()):
+            raise ValueError('opsReason is required when contactedOps is true')
+        return self
+
 
 def _supabase_headers(access_token: str) -> dict[str, str]:
     return {
@@ -63,14 +158,34 @@ def _supabase_headers(access_token: str) -> dict[str, str]:
     }
 
 
+def _check_supabase(resp: httpx.Response, *, auth_endpoint: bool = False) -> None:
+    """Convert Supabase errors into clean HTTP errors.
+
+    auth_endpoint=True  → calls to SUPABASE_URL/auth/v1/user (identity check)
+        401 or 403 → AuthError (expired or invalid session).
+
+    auth_endpoint=False → REST data calls (/rest/v1/... and /rest/v1/rpc/...)
+        401 → AuthError (expired session — frontend will refresh).
+        403 → HTTPException 403 (RLS violation — must NOT log the user out).
+
+    Any other ≥ 400 → HTTPException 502; full text logged server-side only.
+    """
+    if resp.status_code in (401, 403):
+        if auth_endpoint or resp.status_code == 401:
+            raise AuthError()
+        # 403 on a data endpoint = Row Level Security violation
+        raise HTTPException(status_code=403, detail="You do not have permission to do this.")
+    if resp.status_code >= 400:
+        logger.error("Supabase error %d: %s", resp.status_code, resp.text[:300])
+        raise HTTPException(status_code=502, detail="An external service error occurred.")
+
+
 async def _get_user_id(access_token: str, client: httpx.AsyncClient) -> str:
     resp = await client.get(
         f"{SUPABASE_URL}/auth/v1/user",
         headers=_supabase_headers(access_token),
     )
-    if resp.status_code == 401:
-        raise AuthError()
-    resp.raise_for_status()
+    _check_supabase(resp, auth_endpoint=True)
     uid = resp.json().get("id")
     if not uid:
         raise AuthError()
@@ -125,7 +240,7 @@ async def health():
 # AUTH — POST /auth/signup
 # ──────────────────────────────────────────────────────
 @app.post("/auth/signup")
-async def signup(body: AuthBody):
+async def signup(body: SignupBody):
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             f"{SUPABASE_URL}/auth/v1/signup",
@@ -139,7 +254,7 @@ async def signup(body: AuthBody):
     token = data.get("access_token")
     if not token:
         raise HTTPException(status_code=400, detail="Sign-up succeeded but no token returned. Please try logging in.")
-    return {"access_token": token, "user": data.get("user", {})}
+    return {"access_token": token, "refresh_token": data.get("refresh_token", ""), "user": data.get("user", {})}
 
 
 # ──────────────────────────────────────────────────────
@@ -160,22 +275,99 @@ async def login(body: AuthBody):
     token = data.get("access_token")
     if not token:
         raise HTTPException(status_code=400, detail="Login succeeded but no token returned.")
-    return {"access_token": token, "user": data.get("user", {})}
+    return {"access_token": token, "refresh_token": data.get("refresh_token", ""), "user": data.get("user", {})}
+
 
 # ──────────────────────────────────────────────────────
-# PROFILE — GET /profile
+# AUTH — POST /auth/refresh
 # ──────────────────────────────────────────────────────
+class RefreshBody(BaseModel):
+    refresh_token: str
+
+
+@app.post("/auth/refresh")
+async def refresh_token(body: RefreshBody):
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            f"{SUPABASE_URL}/auth/v1/token?grant_type=refresh_token",
+            headers={"apikey": SUPABASE_ANON_KEY, "Content-Type": "application/json"},
+            json={"refresh_token": body.refresh_token},
+        )
+    data = resp.json()
+    if resp.status_code != 200:
+        msg = data.get("error_description") or data.get("msg") or data.get("message", "Token refresh failed")
+        raise HTTPException(status_code=401, detail=msg)
+    return {"access_token": data.get("access_token", ""), "refresh_token": data.get("refresh_token", "")}
+
+
+# ──────────────────────────────────────────────────────
+# AUTH — POST /auth/logout
+# ──────────────────────────────────────────────────────
+@app.post("/auth/logout")
+async def logout(authorization: str = Header(...)):
+    token = authorization.replace("Bearer ", "")
+    async with httpx.AsyncClient() as client:
+        await client.post(
+            f"{SUPABASE_URL}/auth/v1/logout?scope=local",
+            headers={**_supabase_headers(token)},
+        )
+    return {"status": "ok"}
+
+
+# ──────────────────────────────────────────────────────
+# AUTH — POST /auth/change-password
+# ──────────────────────────────────────────────────────
+@app.post("/auth/change-password")
+async def change_password(body: ChangePasswordBody, authorization: str = Header(...)):
+    token = authorization.replace("Bearer ", "")
+    async with httpx.AsyncClient() as client:
+        # Step 1: get the user's email from their token
+        user_resp = await client.get(
+            f"{SUPABASE_URL}/auth/v1/user",
+            headers=_supabase_headers(token),
+        )
+        _check_supabase(user_resp, auth_endpoint=True)
+        user_data = user_resp.json()
+        email = user_data.get("email", "")
+        if not email:
+            raise HTTPException(status_code=400, detail="Could not determine user email")
+
+        # Step 2: verify current password (discard the returned token)
+        verify_resp = await client.post(
+            f"{SUPABASE_URL}/auth/v1/token?grant_type=password",
+            headers={"apikey": SUPABASE_ANON_KEY, "Content-Type": "application/json"},
+            json={"email": email, "password": body.current_password},
+        )
+        if verify_resp.status_code != 200:
+            raise HTTPException(status_code=400, detail="Current password is incorrect")
+
+        # Step 3: update to new password
+        update_resp = await client.put(
+            f"{SUPABASE_URL}/auth/v1/user",
+            headers=_supabase_headers(token),
+            json={"password": body.new_password},
+        )
+        _check_supabase(update_resp, auth_endpoint=True)
+
+    return {"status": "ok"}
 @app.get("/profile")
 async def get_profile(authorization: str = Header(...)):
     token = authorization.replace("Bearer ", "")
     async with httpx.AsyncClient() as client:
         uid = await _get_user_id(token, client)
+        # Also fetch email from Supabase Auth (not stored in profiles table)
+        user_resp = await client.get(
+            f"{SUPABASE_URL}/auth/v1/user",
+            headers=_supabase_headers(token),
+        )
+        _check_supabase(user_resp, auth_endpoint=True)
+        email = user_resp.json().get("email", "")
         resp = await client.get(
             f"{SUPABASE_URL}/rest/v1/profiles",
             params={"id": f"eq.{uid}", "select": "*"},
             headers=_supabase_headers(token),
         )
-    resp.raise_for_status()
+    _check_supabase(resp)
     rows = resp.json()
     if not rows:
         raise HTTPException(status_code=404, detail="Profile not found")
@@ -189,6 +381,7 @@ async def get_profile(authorization: str = Header(...)):
         "markets": row.get("markets_covered", []),
         "notificationPref": row.get("notification_pref", "both"),
         "isComplete": is_complete,
+        "email": email,
     }
 
 
@@ -229,7 +422,7 @@ async def get_corporate_actions(authorization: str = Header(...)):
             params={"select": "*", "order": "id"},
             headers=_supabase_headers(token),
         )
-    resp.raise_for_status()
+    _check_supabase(resp)
     return [
         {
             "id": r["id"],
@@ -266,7 +459,7 @@ async def get_corporate_action(ca_id: str, authorization: str = Header(...)):
             params={"id": f"eq.{ca_id}", "select": "*"},
             headers=_supabase_headers(token),
         )
-    resp.raise_for_status()
+    _check_supabase(resp)
     rows = resp.json()
     if not rows:
         raise HTTPException(status_code=404, detail="Corporate action not found")
@@ -312,7 +505,7 @@ async def get_reviews(authorization: str = Header(...)):
             params={"user_id": f"eq.{uid}", "select": "*", "order": "created_at.desc"},
             headers=_supabase_headers(token),
         )
-    resp.raise_for_status()
+    _check_supabase(resp)
     return [
         {
             "reviewId": r["reference"],
@@ -348,7 +541,7 @@ async def submit_review(body: ReviewBody, authorization: str = Header(...)):
             params={"id": f"eq.{body.eventId}", "select": "*"},
             headers=_supabase_headers(token),
         )
-        event_resp.raise_for_status()
+        _check_supabase(event_resp)
         events = event_resp.json()
         if not events:
             raise HTTPException(status_code=404, detail="Corporate action not found")
@@ -359,7 +552,7 @@ async def submit_review(body: ReviewBody, authorization: str = Header(...)):
                 params={"id": f"eq.{uid}", "select": "*"},
                 headers=_supabase_headers(token),
             )
-            profile_resp.raise_for_status()
+            _check_supabase(profile_resp)
             profiles = profile_resp.json()
             profile = profiles[0] if profiles else {}
             reference = _generate_reference()
@@ -402,7 +595,7 @@ async def submit_review(body: ReviewBody, authorization: str = Header(...)):
                 params={"user_id": f"eq.{uid}", "contacted_operations": "eq.false", "select": "id"},
                 headers=_supabase_headers(token),
             )
-            reviews_resp.raise_for_status()
+            _check_supabase(reviews_resp)
             self_service_count = len(reviews_resp.json())
             return {
                 "success": True, "reference": reference,
@@ -432,7 +625,7 @@ async def submit_review(body: ReviewBody, authorization: str = Header(...)):
                 params={"user_id": f"eq.{uid}", "contacted_operations": "eq.false", "select": "id"},
                 headers=_supabase_headers(token),
             )
-            reviews_resp.raise_for_status()
+            _check_supabase(reviews_resp)
             self_service_count = len(reviews_resp.json())
             if event["status"] == "Preliminary":
                 reason = (
