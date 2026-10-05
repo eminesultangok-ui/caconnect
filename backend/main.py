@@ -386,6 +386,17 @@ async def submit_review(body: ReviewBody, authorization: str = Header(...)):
                 raise HTTPException(status_code=insert_resp.status_code, detail=insert_resp.text)
             inserted = insert_resp.json()
             inserted_row = inserted[0] if isinstance(inserted, list) and inserted else inserted
+            # Best-effort: record advisor's branch for cross-branch indicator
+            try:
+                rpc_resp = await client.post(
+                    f"{SUPABASE_URL}/rest/v1/rpc/record_branch_review",
+                    headers=_supabase_headers(token),
+                    json={"p_event_id": body.eventId},
+                )
+                if rpc_resp.status_code not in (200, 204):
+                    logger.warning("record_branch_review RPC failed: %s", rpc_resp.text)
+            except Exception as exc:
+                logger.warning("record_branch_review RPC error: %s", exc)
             reviews_resp = await client.get(
                 f"{SUPABASE_URL}/rest/v1/reviews",
                 params={"user_id": f"eq.{uid}", "contacted_operations": "eq.false", "select": "id"},
@@ -423,9 +434,20 @@ async def submit_review(body: ReviewBody, authorization: str = Header(...)):
             )
             reviews_resp.raise_for_status()
             self_service_count = len(reviews_resp.json())
+            if event["status"] == "Preliminary":
+                reason = (
+                    "This event cannot be signed off yet — the ratio and payment date are "
+                    "preliminary and may change once the custodian confirms them. "
+                    "Operations will notify you once it is confirmed."
+                )
+            else:
+                reason = (
+                    "This event cannot be signed off yet — it has not yet been confirmed "
+                    "by the custodian. Operations will notify you once it is confirmed."
+                )
             return {
                 "success": False,
-                "reason": "This event cannot be signed off yet — the ratio and payment date are preliminary and may change once confirmed by the custodian. Operations will notify you when it is confirmed.",
+                "reason": reason,
                 "selfServiceCount": self_service_count,
                 "eventStatus": event["status"],
                 "eventSource": event.get("source", ""),

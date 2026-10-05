@@ -184,5 +184,35 @@ ON CONFLICT (id) DO UPDATE SET
     payment_date         = EXCLUDED.payment_date,
     status               = EXCLUDED.status,
     source               = EXCLUDED.source,
-    plain_english        = EXCLUDED.plain_english,
-    reviewed_by_branches = EXCLUDED.reviewed_by_branches;
+    plain_english        = EXCLUDED.plain_english;
+
+-- ============================================
+-- FUNCTION — Record branch review for cross-branch indicator
+-- SECURITY DEFINER so it can write to corporate_actions
+-- despite no write policy for authenticated users.
+-- ============================================
+
+CREATE OR REPLACE FUNCTION public.record_branch_review(p_event_id text)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_branch text;
+BEGIN
+  SELECT branch INTO v_branch FROM profiles WHERE id = auth.uid();
+  IF v_branch IS NULL OR v_branch = '' THEN
+    RETURN;
+  END IF;
+  UPDATE corporate_actions
+    SET reviewed_by_branches = array_append(
+      COALESCE(reviewed_by_branches, '{}'), v_branch
+    )
+    WHERE id = p_event_id
+      AND NOT (v_branch = ANY(COALESCE(reviewed_by_branches, '{}')));
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.record_branch_review(text) TO authenticated;
+REVOKE EXECUTE ON FUNCTION public.record_branch_review(text) FROM PUBLIC, anon;

@@ -13,20 +13,23 @@ import IconButton from '../components/ui/IconButton';
 import WaveHeader from '../components/ui/WaveHeader';
 
 const BRANCHES = ['Melbourne', 'Sydney', 'Singapore', 'London'];
-const MARKETS = ['Australia', 'Japan', 'South Korea', 'Hong Kong', 'Germany', 'France', 'Switzerland', 'United Kingdom'];
+const MARKETS = ['Australia', 'Japan', 'South Korea', 'Hong Kong', 'Germany', 'France', 'Switzerland', 'United Kingdom', 'United States'];
 
 interface ProfileSetupPageProps {
   profile: AdvisorProfile | null;
   onComplete: (profile: AdvisorProfile) => void;
+  isEditing?: boolean;
+  onCancel?: () => void;
   onSignOut?: () => void;
 }
 
-export default function ProfileSetupPage({ profile, onComplete, onSignOut }: ProfileSetupPageProps) {
+export default function ProfileSetupPage({ profile, onComplete, isEditing = false, onCancel, onSignOut }: ProfileSetupPageProps) {
   const [name, setName] = useState(profile?.name ?? '');
   const [branch, setBranch] = useState(profile?.branch ?? '');
   const [markets, setMarkets] = useState<string[]>(profile?.markets ?? []);
   const [notificationPref, setNotificationPref] = useState<AdvisorProfile['notificationPref']>(profile?.notificationPref ?? 'email');
   const [touched, setTouched] = useState({ name: false, branch: false });
+  const [isSaving, setIsSaving] = useState(false);
 
   const handleBlur = useCallback((field: 'name' | 'branch') => {
     setTouched((prev) => ({ ...prev, [field]: true }));
@@ -45,9 +48,10 @@ export default function ProfileSetupPage({ profile, onComplete, onSignOut }: Pro
 
   const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
-    if (!isValid) return;
+    if (!isValid || isSaving) return;
+    setIsSaving(true);
     onComplete({ name: name.trim(), branch, markets, notificationPref });
-  }, [name, branch, markets, notificationPref, isValid, onComplete]);
+  }, [name, branch, markets, notificationPref, isValid, isSaving, onComplete]);
 
   return (
     <div className="min-h-screen bg-white">
@@ -56,7 +60,7 @@ export default function ProfileSetupPage({ profile, onComplete, onSignOut }: Pro
       <main className="page-container">
         <StepIndicator current={1} />
 
-        <h2 className="text-xl font-bold text-brand-blue mb-5">Set Up Your Profile</h2>
+        <h2 className="text-xl font-bold text-brand-blue mb-5">{isEditing ? 'Edit Profile' : 'Set Up Your Profile'}</h2>
 
         <form onSubmit={handleSubmit}>
           <FormSection title="Your Details" description="Tell us about yourself so we can personalise your experience.">
@@ -116,11 +120,20 @@ export default function ProfileSetupPage({ profile, onComplete, onSignOut }: Pro
 
           {/* PRIMARY ACTION BUTTON — IconButton */}
           <IconButton
-            label="Continue to Dashboard"
+            label={isSaving ? 'Saving…' : isEditing ? 'Save changes' : 'Continue to Dashboard'}
             type="submit"
-            disabled={!isValid}
+            disabled={!isValid || isSaving}
             className="w-full"
           />
+          {isEditing && onCancel && (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="w-full mt-2 py-2.5 px-4 rounded-full text-sm font-semibold text-brand-blue hover:bg-brand-blue/5 transition-colors"
+            >
+              Cancel
+            </button>
+          )}
         </form>
       </main>
     </div>

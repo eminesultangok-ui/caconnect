@@ -11,9 +11,10 @@ interface WaveHeaderProps {
   variant?: 'full' | 'compact';
   subtitle?: string;
   onSignOut?: () => void;
+  onEditProfile?: () => void;
 }
 
-export default function WaveHeader({ variant = 'full', subtitle, onSignOut }: WaveHeaderProps) {
+export default function WaveHeader({ variant = 'full', subtitle, onSignOut, onEditProfile }: WaveHeaderProps) {
   const isFull = variant === 'full';
   const height = isFull ? 'h-32' : 'h-16';
   const [confirmingSignOut, setConfirmingSignOut] = useState(false);
@@ -48,13 +49,24 @@ export default function WaveHeader({ variant = 'full', subtitle, onSignOut }: Wa
       </div>
       <div className="relative z-10 flex flex-col items-center justify-center h-full px-4">
         {onSignOut && (
-          <button
-            type="button"
-            onClick={() => setConfirmingSignOut(true)}
-            className="absolute top-2 right-4 text-xs text-brand-blue underline hover:opacity-70 z-20"
-          >
-            Sign out
-          </button>
+          <div className="absolute top-2 right-4 flex items-center gap-3 z-20">
+            {onEditProfile && (
+              <button
+                type="button"
+                onClick={onEditProfile}
+                className="text-xs text-brand-blue underline hover:opacity-70"
+              >
+                Edit profile
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setConfirmingSignOut(true)}
+              className="text-xs text-brand-blue underline hover:opacity-70"
+            >
+              Sign out
+            </button>
+          </div>
         )}
         <h1 className={`font-bold text-brand-blue ${isFull ? 'text-2xl' : 'text-lg'}`}>
           CAConnect

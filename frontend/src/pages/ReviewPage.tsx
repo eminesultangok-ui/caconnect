@@ -28,6 +28,7 @@ export default function ReviewPage({ draft, actions, profile, initialLoading, on
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [touched, setTouched] = useState({ affectedAccountCount: false, election: false });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const event = useMemo(() => actions.find((a) => a.id === id), [actions, id]);
 
@@ -80,9 +81,10 @@ export default function ReviewPage({ draft, actions, profile, initialLoading, on
 
   const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
-    if (!isValid) return;
+    if (!isValid || isSubmitting) return;
+    setIsSubmitting(true);
     onSubmit();
-  }, [isValid, onSubmit]);
+  }, [isValid, isSubmitting, onSubmit]);
 
   return (
     <div className="min-h-screen bg-white">
@@ -122,7 +124,7 @@ export default function ReviewPage({ draft, actions, profile, initialLoading, on
             )}
           </FormSection>
 
-          <button type="submit" disabled={!isValid} className={`w-full py-2.5 px-4 rounded-full text-sm font-semibold transition-colors duration-200 ${isValid ? 'bg-ink text-white hover:bg-ink/90' : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'}`}>Continue</button>
+          <button type="submit" disabled={!isValid || isSubmitting} className={`w-full py-2.5 px-4 rounded-full text-sm font-semibold transition-colors duration-200 ${isValid && !isSubmitting ? 'bg-ink text-white hover:bg-ink/90' : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'}`}>{isSubmitting ? 'Continuing…' : 'Continue'}</button>
         </form>
       </main>
     </div>

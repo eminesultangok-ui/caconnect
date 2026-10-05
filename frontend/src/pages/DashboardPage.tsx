@@ -18,6 +18,8 @@ interface DashboardPageProps {
   reviews: ReviewEntry[];
   profile: AdvisorProfile | null;
   stats: AdoptionStats;
+  alertsCount?: number;
+  onEditProfile?: () => void;
   onSignOut?: () => void;
 }
 
@@ -28,7 +30,7 @@ const FILTER_OPTIONS = [
   { value: 'Pending', label: 'Pending' },
 ];
 
-export default function DashboardPage({ actions, reviews, profile, stats, onSignOut }: DashboardPageProps) {
+export default function DashboardPage({ actions, reviews, profile, stats, alertsCount = 0, onEditProfile, onSignOut }: DashboardPageProps) {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -54,7 +56,7 @@ export default function DashboardPage({ actions, reviews, profile, stats, onSign
 
   return (
     <div className="min-h-screen bg-white pb-16">
-      <WaveHeader variant="full" subtitle="Corporate Actions Self Service" onSignOut={onSignOut} />
+      <WaveHeader variant="full" subtitle="Corporate Actions Self Service" onSignOut={onSignOut} onEditProfile={onEditProfile} />
 
       <main className="px-4 py-5">
         <h2 className="text-xl font-bold text-brand-blue mb-4">Dashboard</h2>
@@ -130,7 +132,7 @@ export default function DashboardPage({ actions, reviews, profile, stats, onSign
         </div>
       </main>
 
-      <TabBar onSearch={() => searchRef.current?.focus()} />
+      <TabBar alertsCount={alertsCount} />
     </div>
   );
 }

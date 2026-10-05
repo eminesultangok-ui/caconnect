@@ -21,6 +21,9 @@ import ReviewPage from './pages/ReviewPage';
 import ConfirmPage from './pages/ConfirmPage';
 import ResultPage from './pages/ResultPage';
 import HistoryPage from './pages/HistoryPage';
+import AlertsPage from './pages/AlertsPage';
+import { computeAlertsCount } from './pages/AlertsPage';
+import SearchPage from './pages/SearchPage';
 import RequireProfile from './components/RequireProfile';
 
 const emptyDraft: ReviewDraft = {
@@ -37,6 +40,7 @@ export default function App() {
   const [corporateActions, setCorporateActions] = useState<CorporateAction[]>([]);
   const [reviewDraft, setReviewDraft] = useState<ReviewDraft>({ ...emptyDraft });
   const [initialLoading, setInitialLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // ─── Pure data loader — no navigation, just state updates ──
   // Returns 'Complete' | 'Incomplete' | 'AuthError' so callers decide where to go.
@@ -107,6 +111,9 @@ export default function App() {
     };
   }, [reviews, currentUser, corporateActions.length]);
 
+  // ─── Alerts count for TabBar badge ────────────────
+  const alertsCount = useMemo(() => computeAlertsCount(corporateActions), [corporateActions]);
+
   // ─── Sign out ─────────────────────────────────────
   const handleSignOut = useCallback(() => {
     api.clearToken();
@@ -124,16 +131,24 @@ export default function App() {
     if (result === 'AuthError') throw new Error('Authentication failed');
     return result === 'Complete';
   }, [loadAllData]);
-  // ─── Profile setup ────────────────────────────────
+  // ─── Profile setup / edit ──────────────────────────
   const handleProfileComplete = useCallback(async (profile: AdvisorProfile) => {
-    await api.updateProfile({
-      name: profile.name, branch: profile.branch,
-      markets: profile.markets, notificationPref: profile.notificationPref,
-    });
+    try {
+      await api.updateProfile({
+        name: profile.name, branch: profile.branch,
+        markets: profile.markets, notificationPref: profile.notificationPref,
+      });
+    } catch (err) {
+      if (err instanceof AuthError) { handleSignOut(); return; }
+      throw err;
+    }
     setCurrentUser(profile);
     try { setReviews(await api.getReviews()); } catch { /* non-critical */ }
     navigate('/dashboard');
-  }, [navigate]);
+  }, [handleSignOut, navigate]);
+
+  // ─── Edit profile entry point ─────────────────────
+  const handleEditProfile = useCallback(() => navigate('/edit-profile'), [navigate]);
 
   // ─── Draft handlers (unchanged logic) ─────────────
   const handleBeginReview = useCallback((eventId: string, eventType: string, eventStatus: ReviewDraft['eventStatus'], eventSource: string) => {
@@ -155,6 +170,8 @@ export default function App() {
   const handleReviewSubmit = useCallback(() => { navigate('/confirm'); }, [navigate]);
   // ─── Confirm sign-off (calls backend) ─────────────
   const handleConfirm = useCallback(async () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     try {
       const result = await api.submitReview({
         eventId: reviewDraft.eventId,
@@ -164,8 +181,13 @@ export default function App() {
         contactedOps: reviewDraft.contactedOps,
         opsReason: reviewDraft.opsReason,
       });
-      // Refresh reviews state from backend (no redirect)
-      try { setReviews(await api.getReviews()); } catch { /* use optimistic update below */ }
+      // Refresh reviews and corporate actions in parallel
+      const [newReviews, newActions] = await Promise.all([
+        api.getReviews().catch(() => null),
+        api.getCorporateActions().catch(() => null),
+      ]);
+      if (newReviews) setReviews(newReviews);
+      if (newActions) setCorporateActions(newActions);
       if (result.success) {
         // Optimistic add in case the GET was slow
         setReviews((prev) => {
@@ -187,8 +209,10 @@ export default function App() {
     } catch (err) {
       if (err instanceof AuthError) { handleSignOut(); return; }
       console.error('Submit review failed:', err);
+    } finally {
+      setIsSubmitting(false);
     }
-  }, [reviewDraft, handleSignOut, navigate]);
+  }, [reviewDraft, isSubmitting, handleSignOut, navigate]);
 
   // ─── Delete review (calls backend) ────────────────
   const handleDeleteReview = useCallback(async (reviewId: string) => {
@@ -207,12 +231,15 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<LoginPage onLogin={handleLogin} initialLoading={initialLoading} />} />
       <Route path="/setup" element={<RequireProfile currentUser={currentUser} initialLoading={initialLoading}><ProfileSetupPage profile={currentUser} onComplete={handleProfileComplete} onSignOut={handleSignOut} /></RequireProfile>} />
-      <Route path="/dashboard" element={<RequireProfile currentUser={currentUser} initialLoading={initialLoading}><DashboardPage actions={corporateActions} reviews={reviews} profile={currentUser} stats={stats} onSignOut={handleSignOut} /></RequireProfile>} />
-      <Route path="/event/:id" element={<RequireProfile currentUser={currentUser} initialLoading={initialLoading}><EventDetailPage actions={corporateActions} reviews={reviews} profile={currentUser} reviewDraft={reviewDraft} initialLoading={initialLoading} onBeginReview={handleBeginReview} onResetDraft={handleResetDraft} onSignOut={handleSignOut} /></RequireProfile>} />
+      <Route path="/edit-profile" element={<RequireProfile currentUser={currentUser} initialLoading={initialLoading}><ProfileSetupPage profile={currentUser} onComplete={handleProfileComplete} isEditing onCancel={() => navigate('/dashboard')} onSignOut={handleSignOut} /></RequireProfile>} />
+      <Route path="/dashboard" element={<RequireProfile currentUser={currentUser} initialLoading={initialLoading}><DashboardPage actions={corporateActions} reviews={reviews} profile={currentUser} stats={stats} alertsCount={alertsCount} onEditProfile={handleEditProfile} onSignOut={handleSignOut} /></RequireProfile>} />
+      <Route path="/event/:id" element={<RequireProfile currentUser={currentUser} initialLoading={initialLoading}><EventDetailPage actions={corporateActions} reviews={reviews} profile={currentUser} reviewDraft={reviewDraft} initialLoading={initialLoading} alertsCount={alertsCount} onBeginReview={handleBeginReview} onResetDraft={handleResetDraft} onEditProfile={handleEditProfile} onSignOut={handleSignOut} /></RequireProfile>} />
       <Route path="/event/:id/review" element={<RequireProfile currentUser={currentUser} initialLoading={initialLoading}><ReviewPage draft={reviewDraft} actions={corporateActions} profile={currentUser} initialLoading={initialLoading} onChange={handleDraftChange} onSubmit={handleReviewSubmit} onSignOut={handleSignOut} /></RequireProfile>} />
-      <Route path="/confirm" element={<RequireProfile currentUser={currentUser} initialLoading={initialLoading}><ConfirmPage draft={reviewDraft} actions={corporateActions} profile={currentUser} onConfirm={handleConfirm} onSignOut={handleSignOut} /></RequireProfile>} />
+      <Route path="/confirm" element={<RequireProfile currentUser={currentUser} initialLoading={initialLoading}><ConfirmPage draft={reviewDraft} actions={corporateActions} profile={currentUser} onConfirm={handleConfirm} isSubmitting={isSubmitting} onSignOut={handleSignOut} /></RequireProfile>} />
       <Route path="/result" element={<RequireProfile currentUser={currentUser} initialLoading={initialLoading}><ResultPage reviews={reviews} stats={stats} onDelete={handleDeleteReview} onSignOut={handleSignOut} /></RequireProfile>} />
-      <Route path="/history" element={<RequireProfile currentUser={currentUser} initialLoading={initialLoading}><HistoryPage reviews={reviews} stats={stats} onDelete={handleDeleteReview} onSignOut={handleSignOut} /></RequireProfile>} />
+      <Route path="/history" element={<RequireProfile currentUser={currentUser} initialLoading={initialLoading}><HistoryPage reviews={reviews} stats={stats} onDelete={handleDeleteReview} alertsCount={alertsCount} onEditProfile={handleEditProfile} onSignOut={handleSignOut} /></RequireProfile>} />
+      <Route path="/alerts" element={<RequireProfile currentUser={currentUser} initialLoading={initialLoading}><AlertsPage actions={corporateActions} reviews={reviews} profile={currentUser} alertsCount={alertsCount} onEditProfile={handleEditProfile} onSignOut={handleSignOut} /></RequireProfile>} />
+      <Route path="/search" element={<RequireProfile currentUser={currentUser} initialLoading={initialLoading}><SearchPage actions={corporateActions} alertsCount={alertsCount} onEditProfile={handleEditProfile} onSignOut={handleSignOut} /></RequireProfile>} />
       <Route path="*" element={<LoginPage onLogin={handleLogin} initialLoading={initialLoading} />} />
     </Routes>
   );

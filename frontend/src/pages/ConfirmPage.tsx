@@ -19,10 +19,11 @@ interface ConfirmPageProps {
   actions: CorporateAction[];
   profile: AdvisorProfile | null;
   onConfirm: () => void;
+  isSubmitting?: boolean;
   onSignOut?: () => void;
 }
 
-export default function ConfirmPage({ draft, actions, profile, onConfirm, onSignOut }: ConfirmPageProps) {
+export default function ConfirmPage({ draft, actions, profile, onConfirm, isSubmitting = false, onSignOut }: ConfirmPageProps) {
   const navigate = useNavigate();
   const [consented, setConsented] = useState(false);
 
@@ -42,9 +43,9 @@ export default function ConfirmPage({ draft, actions, profile, onConfirm, onSign
 
   const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
-    if (!consented) return;
+    if (!consented || isSubmitting) return;
     onConfirm();
-  }, [consented, onConfirm]);
+  }, [consented, isSubmitting, onConfirm]);
 
   return (
     <div className="min-h-screen bg-white">
@@ -114,7 +115,12 @@ export default function ConfirmPage({ draft, actions, profile, onConfirm, onSign
             </label>
           </div>
 
-          <IconButton label="Confirm and record" type="submit" disabled={!consented} className="w-full" />
+          <IconButton
+            label={isSubmitting ? 'Submitting…' : 'Confirm and record'}
+            type="submit"
+            disabled={!consented || isSubmitting}
+            className="w-full"
+          />
         </form>
       </main>
     </div>

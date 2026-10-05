@@ -17,10 +17,12 @@ interface HistoryPageProps {
   reviews: ReviewEntry[];
   stats: AdoptionStats;
   onDelete: (reviewId: string) => void;
+  alertsCount?: number;
+  onEditProfile?: () => void;
   onSignOut?: () => void;
 }
 
-export default function HistoryPage({ reviews, stats, onDelete, onSignOut }: HistoryPageProps) {
+export default function HistoryPage({ reviews, stats, onDelete, alertsCount = 0, onEditProfile, onSignOut }: HistoryPageProps) {
   const navigate = useNavigate();
 
   // Sort newest-first
@@ -37,7 +39,7 @@ export default function HistoryPage({ reviews, stats, onDelete, onSignOut }: His
 
   return (
     <div className="min-h-screen bg-white pb-16">
-      <WaveHeader variant="compact" onSignOut={onSignOut} />
+      <WaveHeader variant="compact" onSignOut={onSignOut} onEditProfile={onEditProfile} />
 
       <button type="button" onClick={() => navigate(-1)} className="ml-4 mt-2 text-sm text-brand-blue hover:opacity-70">← Back</button>
 
@@ -93,7 +95,7 @@ export default function HistoryPage({ reviews, stats, onDelete, onSignOut }: His
         )}
       </main>
 
-      <TabBar />
+      <TabBar alertsCount={alertsCount} />
     </div>
   );
 }

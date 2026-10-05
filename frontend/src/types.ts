@@ -31,7 +31,7 @@ export interface AdvisorProfile {
   notificationPref: 'email' | 'in-app' | 'both';
 }
 
-// ReviewEntry — one completed sign-off (stored in localStorage)
+// ReviewEntry — one completed sign-off (stored in Supabase)
 export interface ReviewEntry {
   reviewId: string;
   advisorName: string;

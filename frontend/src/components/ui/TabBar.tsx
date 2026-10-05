@@ -2,16 +2,14 @@
  * TabBar — Self-contained fixed bottom tab bar for mobile navigation.
  * Owns its own navigation via useNavigate.
  * Derives active tab from useLocation().pathname.
- * Only prop: optional onSearch to focus search field on DashboardPage.
- * Tabs: Dashboard, Search, Alerts (2-sec toast), History.
+ * Tabs: Dashboard, Search, Alerts, History.
  */
 
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useState, useEffect } from 'react';
 import { LayoutDashboard, Search, Bell, ListChecks } from 'lucide-react';
 
 interface TabBarProps {
-  onSearch?: () => void;
+  alertsCount?: number;
 }
 
 const TABS = [
@@ -21,41 +19,26 @@ const TABS = [
   { key: 'history' as const,   label: 'History',   icon: ListChecks },
 ];
 
-export default function TabBar({ onSearch }: TabBarProps) {
+export default function TabBar({ alertsCount = 0 }: TabBarProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const [showAlertToast, setShowAlertToast] = useState(false);
 
   // Derive active tab from current pathname
-  const activeKey = location.pathname === '/history' ? 'history' : 'dashboard';
-
-  // Auto-dismiss toast after 2 seconds
-  useEffect(() => {
-    if (!showAlertToast) return;
-    const timer = setTimeout(() => setShowAlertToast(false), 2000);
-    return () => clearTimeout(timer);
-  }, [showAlertToast]);
+  const activeKey =
+    location.pathname === '/history' ? 'history' :
+    location.pathname === '/search'  ? 'search' :
+    location.pathname === '/alerts'  ? 'alerts' :
+    'dashboard';
 
   const handleClick = (key: string) => {
     if (key === 'dashboard') navigate('/dashboard');
     if (key === 'history') navigate('/history');
-    if (key === 'alerts') setShowAlertToast(true);
-    if (key === 'search') {
-      if (onSearch) {
-        onSearch();
-      } else {
-        navigate('/dashboard');
-      }
-    }
+    if (key === 'alerts') navigate('/alerts');
+    if (key === 'search') navigate('/search');
   };
 
   return (
     <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[420px] bg-white border-t border-neutral-200 z-50">
-      {showAlertToast && (
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-neutral-800 text-white text-xs rounded-lg whitespace-nowrap shadow-lg">
-          Alerts are not part of this MVP
-        </div>
-      )}
       <div className="flex items-center justify-around py-2">
         {TABS.map(({ key, label, icon: Icon }) => {
           const isActive = key === activeKey;
@@ -70,7 +53,14 @@ export default function TabBar({ onSearch }: TabBarProps) {
                   : 'text-neutral-400 hover:text-neutral-600'
               }`}
             >
-              <Icon size={20} strokeWidth={isActive ? 2.5 : 1.5} />
+              <span className="relative">
+                <Icon size={20} strokeWidth={isActive ? 2.5 : 1.5} />
+                {key === 'alerts' && alertsCount > 0 && (
+                  <span className="absolute -top-1.5 -right-2 bg-danger text-white text-[10px] font-bold leading-none rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">
+                    {alertsCount > 99 ? '99+' : alertsCount}
+                  </span>
+                )}
+              </span>
               {label}
             </button>
           );

@@ -20,12 +20,14 @@ interface EventDetailPageProps {
   profile: AdvisorProfile | null;
   reviewDraft: ReviewDraft;
   initialLoading?: boolean;
+  alertsCount?: number;
   onBeginReview: (eventId: string, eventType: string, eventStatus: ReviewDraft['eventStatus'], eventSource: string) => void;
   onResetDraft: (eventId: string, eventType: string, eventStatus: ReviewDraft['eventStatus'], eventSource: string) => void;
+  onEditProfile?: () => void;
   onSignOut?: () => void;
 }
 
-export default function EventDetailPage({ actions, reviews: _reviews, profile, reviewDraft, initialLoading, onBeginReview, onResetDraft, onSignOut }: EventDetailPageProps) {
+export default function EventDetailPage({ actions, reviews: _reviews, profile, reviewDraft, initialLoading, alertsCount = 0, onBeginReview, onResetDraft, onEditProfile, onSignOut }: EventDetailPageProps) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
@@ -67,7 +69,7 @@ export default function EventDetailPage({ actions, reviews: _reviews, profile, r
 
   return (
     <div className="min-h-screen bg-white pb-16">
-      <WaveHeader variant="full" subtitle={event.security} onSignOut={onSignOut} />
+      <WaveHeader variant="full" subtitle={event.security} onSignOut={onSignOut} onEditProfile={onEditProfile} />
 
       <button type="button" onClick={() => navigate(-1)} className="ml-4 mt-2 text-sm text-brand-blue hover:opacity-70">← Back</button>
 
@@ -137,7 +139,7 @@ export default function EventDetailPage({ actions, reviews: _reviews, profile, r
         )}
       </main>
 
-      <TabBar />
+      <TabBar alertsCount={alertsCount} />
     </div>
   );
 }
